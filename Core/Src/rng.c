@@ -42,7 +42,9 @@ void MX_RNG_Init(void) {
 		Error_Handler();
 	}
 	/* USER CODE BEGIN RNG_Init 2 */
-
+	/* CEIS is sticky and random_buffer() treats it as fatal. Clear the
+	 * power-on baseline so only a glitch during generation trips it. */
+	__HAL_RNG_CLEAR_IT(&hrng, RNG_IT_CEI);
 	/* USER CODE END RNG_Init 2 */
 
 }
@@ -57,7 +59,7 @@ void HAL_RNG_MspInit(RNG_HandleTypeDef *rngHandle) {
 		/** Initializes the peripherals clock
 		 */
 		PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RNG;
-		PeriphClkInitStruct.RngClockSelection = RCC_RNGCLKSOURCE_LSI;
+		PeriphClkInitStruct.RngClockSelection = RCC_RNGCLKSOURCE_HSI48;
 		if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK) {
 			Error_Handler();
 		}

@@ -40,6 +40,13 @@
 #include "includes.h"
 #include "rng.h"
 
+static CONFIDENTIAL char mnemo[24 * 10];
+
+/* Wipe the mnemonic once the user is done with it */
+void mnemonic_clear(void) {
+	memzero(mnemo, sizeof(mnemo));
+}
+
 const char* mnemonic_generate(int strength) {
 	if (strength % 32 || strength < 128 || strength > 256) {
 		return 0;
@@ -56,11 +63,26 @@ void random_buffer(uint8_t *buf, uint8_t len) {
 
 	for (uint8_t i = 0; i < len; i++) {
 		if (i % 4 == 0) {
-			//   r = random32();
-			HAL_RNG_GenerateRandomNumber(&hrng, &r);
+			/* Halt on entropy failure. HAL leaves r untouched on
+			 * timeout or seed error, so carrying on would just
+			 * repeat the previous word. The clock error is not
+			 * checked by HAL in polling mode; test the sticky CEIS
+			 * rather than CECS, because a glitch that corrupted this
+			 * sample self-clears in CECS before we get to read it. */
+			if (HAL_RNG_GenerateRandomNumber(&hrng, &r) != HAL_OK
+					|| __HAL_RNG_GET_IT(&hrng, RNG_IT_CEI)) {
+				memzero(buf, len);
+				memzero(&r, sizeof(r));
+				Error_Handler();
+			}
 		}
 		buf[i] = (r >> ((i % 4) * 8)) & 0xFF;
 	}
+
+	/* HAL caches every word in the handle, which lives in .bss for the
+	 * lifetime of the device. Do not leave the tail of the seed there. */
+	memzero(&r, sizeof(r));
+	memzero(&hrng.RandomNumber, sizeof(hrng.RandomNumber));
 }
 
 const char* mnemonic_from_data(const uint8_t *data, int len) {
@@ -77,7 +99,6 @@ const char* mnemonic_from_data(const uint8_t *data, int len) {
 	memcpy(bits, data, len);
 
 	int mlen = len * 3 / 4;
-	static CONFIDENTIAL char mnemo[24 * 10];
 
 	int i, j, idx;
 	char *p = mnemo;

@@ -44,6 +44,7 @@ extern "C" {
 #include "images.h"
 #include "service.h"
 #include "bip39.h"
+#include "memzero.h"
 #include "menu.h"
 
 /* Exported define -----------------------------------------------------------*/

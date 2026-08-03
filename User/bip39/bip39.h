@@ -34,4 +34,6 @@ void random_buffer(uint8_t *buf, uint8_t len);
 
 const char* mnemonic_from_data(const uint8_t *data, int len);
 
+void mnemonic_clear(void);
+
 #endif

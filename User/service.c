@@ -48,6 +48,7 @@ static void ShowChargeDynamic(void);
 static void UserButtonHandle(uint8_t button, ButtonStatusEnum status);
 static void MnemonicsNumberSelect(uint8_t dir);
 static void MnemonicsCovt(char const *pmnem);
+static void MnemonicsWipe(void);
 static void CommandServ(int argc, char *argv[]);
 static void CommandOled(int argc, char *argv[]);
 
@@ -172,6 +173,7 @@ void ServicePolling(void) {
 	// cpu power saving
 	if (g_status == dev_pwr_off && !IsButtonPress() && !IS_USB_IN()) {
 		DBG_LOG("cpu enter standby mode");
+		MnemonicsWipe();	// catch-all: every power-off path ends here
 		DeviceSleep();
 	}
 }
@@ -239,11 +241,13 @@ void UserButtonHandle(uint8_t button, ButtonStatusEnum status) {
 			char const *p;
 
 			strength = num_select * 4 / 3 * 8;
-			mnemonic_generate(strength);
 
 			ShowGeneratedPage();
 			TS_DELAY(3000);
 			p = mnemonic_generate(strength);
+			if (p == NULL) {	// bad strength; never reachable from the UI
+				Error_Handler();
+			}
 			MnemonicsCovt(p);
 
 			page_select = 1;
@@ -266,6 +270,7 @@ void UserButtonHandle(uint8_t button, ButtonStatusEnum status) {
 		}
 		if (g_status == dev_regen) {
 			if (regen_yes == 1) {
+				MnemonicsWipe();		// discard the old mnemonic
 				ShowGenerateNoticePage();
 				g_status = dev_gen_notice;
 			} else {
@@ -276,6 +281,7 @@ void UserButtonHandle(uint8_t button, ButtonStatusEnum status) {
 			return;
 		}
 		if (g_status == dev_keep || g_status == dev_import) {
+			MnemonicsWipe();		// user is done, leaving the mnemonic flow
 			ShowGenerateNoticePage();
 			g_status = dev_gen_notice;
 			return;
@@ -457,6 +463,17 @@ static void MnemonicsCovt(char const *pmnem) {
 }
 
 /**
+* @brief Wipe the mnemonic out of RAM
+*
+* mnem_list only holds pointers into mnem_buf, nothing secret. Keeping them
+* means a stray redraw shows empty strings instead of dereferencing NULL.
+*/
+static void MnemonicsWipe(void) {
+	memzero(mnem_buf, sizeof(mnem_buf));
+	mnemonic_clear();
+}
+
+/**
 * @brief service test command function
 *
 */
@@ -464,11 +481,21 @@ static void CommandServ(int argc, char *argv[]) {
 	argc--;
 	argv++;
 
+#if DEBUG > 0
+	/* Bench tool only: it prints a real mnemonic in the clear. Never ship
+	 * it enabled -- build release firmware with -DDEBUG=0. */
 	if (ARGV_EQUAL("mngen")) {
 		char *list;
+
+		if (argc < 2) {
+			DBG_LOG("usage: serv mngen <128|160|192|224|256>");
+			return;
+		}
 		list = (char*) mnemonic_generate(atoi(argv[1]));
-		DBG_LOG("mnemonic_generate():%s", list);
+		DBG_LOG("mnemonic_generate():%s", list ? list : "(bad strength)");
+		mnemonic_clear();	// do not leave it sitting in RAM
 	}
+#endif
 
 	if (ARGV_EQUAL("batchk")) {
 		uint8_t level;

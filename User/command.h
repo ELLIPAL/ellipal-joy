@@ -81,7 +81,7 @@ typedef struct CmdEntrance {
   CommandPrintf("log> " format "\r\n", ##__VA_ARGS__)
 #define DBG_SEND(data, len) CommandSend(data, len)
 #else
-#define DBG_LOG(format)
+#define DBG_LOG(format, ...)
 #define DBG_SEND(data, len)
 #endif
 
